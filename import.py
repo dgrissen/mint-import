@@ -1,4 +1,5 @@
 from credentials import *
+from utils import build_post_dict
 #from mint.tags import *
 #from mint.utils import *
 from mint.api import Mint
@@ -58,7 +59,7 @@ class MintAdder(object):
                 dict_vals['debit']['vals'].append(row[dict_vals['debit']['header_index']])
                 dict_vals['credit']['vals'].append(row[dict_vals['credit']['header_index']])
 
-            self.import_list = import_dict(dict_vals, self.token, self.default_category, self.default_merchant)
+            self.import_list = self.import_dict(dict_vals, self.token, self.default_category, self.default_merchant)
 
         except Exception as e:
             sys.exit('Error loading file and data: %s' % str(e))
@@ -104,133 +105,72 @@ class MintAdder(object):
         sleep(10)
 
 
-
-    def selenium_transactions(import_list):
+    def iterate_all_transaction(self):
 
         try:
             print 'Starting Transaction import....\n'
-            for c,i in enumerate(import_list):
-                pass
+            for c,i in enumerate(self.import_list):
+                self.import_specific_transaction(c,i)
 
+            print 'Transaction import complete!\n'
         except Exception as e:
             print 'Error handling the specific add: %s' % str(e)
-            print 'Errored out on this line: %s\n' % i
+            print 'Error occurred on this line: %s\n' % i
             print 'Traceback:\n'
             traceback.print_exc()
 
 
+    def import_specific_transaction(self,c,i):
+        print 'Adding %s expense=%s on %s\n\t for %s\n' % (str(i['amount']), str(i['mtIsExpense']), str(i['date']), str(i['note']))
+        self.driver.find_element_by_id('controls-add').click()
+        sleep(2)
+        #reset it to expense
+        self.driver.find_element_by_id('txnEdit-mt-expense').send_keys(Keys.SPACE)
+        #disable the auto subtract from ATM cash
+        self.driver.find_element_by_id('txnEdit-mt-cash-split').click()
+        self.driver.find_element_by_id('txnEdit-date-input').click()
+        self.driver.find_element_by_id('txnEdit-date-input').clear()
+        self.driver.find_element_by_id('txnEdit-date-input').send_keys(i['date']+Keys.TAB)
+
+        ######################Miscellaneous code for complex keystrokes#####################
+        #driver.find_element_by_id('txnEdit-date-input').send_keys(i['date'])
+        #driver.key_down(Keys.COMMAND).send_keys('c').key_up(Keys.COMMAND).perform()
+        #a=action_chains.ActionChains(driver)
+        #a.key_down(Keys.COMMAND).send_keys('a').key_up(Keys.COMMAND).perform()
+        #driver.find_element_by_id('txnEdit-date-input').
+        #driver.find_element_by_id('txnEdit-date-input').send_keys(1)
+        ####################################################################################
+
+        self.driver.find_element_by_id('txnEdit-merchant_input').click()
+        self.driver.find_element_by_id('txnEdit-merchant_input').clear()
+        self.driver.find_element_by_id('txnEdit-merchant_input').send_keys(i['merchant'])
+        self.driver.find_element_by_id('txnEdit-category_input').clear()
+        self.driver.find_element_by_id('txnEdit-category_input').send_keys(i['category'])
+
+        #Before we set the amount, we need to set the type of expense
+        if not i['mtIsExpense']:
+            #this is a credit, click the credit button
+            self.driver.find_element_by_id('txnEdit-mt-income').send_keys(Keys.SPACE)
+
+        self.driver.find_element_by_id('txnEdit-amount_input').clear()
+        self.driver.find_element_by_id('txnEdit-amount_input').send_keys(str(i['amount']))
+        self.driver.find_element_by_id('txnEdit-note').click()
+        self.driver.find_element_by_id('txnEdit-note').send_keys('Mint Importer:\n\n%s' % (str(i['note'])))
+        self.driver.find_element_by_id('txnEdit-submit').click()
+        print 'Transaction %s of %s successfully added\n' % (str(c+1), str(len(self.import_list)))
+        print '----------------------\n\n'
+        sleep(3)
 
 
 
-def main(file, default_worksheet, default_category, date_col, description_col, debit_col, credit_col, header_row, token, default_merchant):
-    if not file[-4:] == '.xls':
-        sys.exit('You must use an XLS file')
+
+def main(mintadder=None):
     
     try:
-        workbook = xlrd.open_workbook(file)
-        sh = workbook.sheet_by_name(default_worksheet)
-        #get number of rows
-        num_rows = (sh.nrows - 1) - header_row
-        current_row = -1 + header_row
-        #print dict(worksheet.row_values(rownum) for rownum in range(worksheet.nrows))
-        #setup the map with customer specific values
-        header_vals=sh.row_values(header_row)
-        dict_vals={'date':{'header_index':header_vals.index(date_col),'vals':[]}, 'description':{'header_index':header_vals.index(description_col), 'vals':[]},
-                         'debit':{'header_index':header_vals.index(debit_col), 'vals':[]} , 'credit':{'header_index':header_vals.index(credit_col), 'vals':[]} }
-        
-        #initialize the dict on the first row after the header
-        current_row+=1
-        #populate the dict
-        while current_row < num_rows:
-            current_row+=1
-            row = sh.row_values(current_row)
-            dict_vals['date']['vals'].append(xlrd.xldate_as_tuple(row[dict_vals['date']['header_index']], workbook.datemode))
-            dict_vals['description']['vals'].append(row[dict_vals['description']['header_index']])
-            dict_vals['debit']['vals'].append(row[dict_vals['debit']['header_index']])
-            dict_vals['credit']['vals'].append(row[dict_vals['credit']['header_index']])
-        
-        
-        try:
-            #import_dict(dict_vals, token, default_category, default_merchant)
-            import_list = import_dict(dict_vals, token, default_category, default_merchant)
-
-            selenium_login(driver)
-            selenium_transactions(import_list, driver)
-        except Exception as e:
-            print 'Error running the import module: %s' % str(e)
-            
+        ma.load_data()
+        ma.mint_login()
     except Exception as e:
         print 'There was an error opening your file: %s' % str(e)
-
-
-def import_specific_transaction():
-    print 'Adding %s expense=%s on %s\n\t for %s\n' % (str(i['amount']), str(i['mtIsExpense']), str(i['date']), str(i['note']))
-    driver.find_element_by_id('controls-add').click()
-    sleep(2)
-    #reset it to expense
-    driver.find_element_by_id('txnEdit-mt-expense').send_keys(Keys.SPACE)
-    #disable the auto subtract from ATM cash
-    driver.find_element_by_id('txnEdit-mt-cash-split').click()
-    driver.find_element_by_id('txnEdit-date-input').click()
-    driver.find_element_by_id('txnEdit-date-input').clear()
-    driver.find_element_by_id('txnEdit-date-input').send_keys(i['date']+Keys.TAB)
-
-    ######################Miscellaneous code for complex keystrokes#####################
-    #driver.find_element_by_id('txnEdit-date-input').send_keys(i['date'])
-    #driver.key_down(Keys.COMMAND).send_keys('c').key_up(Keys.COMMAND).perform()
-    #a=action_chains.ActionChains(driver)
-    #a.key_down(Keys.COMMAND).send_keys('a').key_up(Keys.COMMAND).perform()
-    #driver.find_element_by_id('txnEdit-date-input').
-    #driver.find_element_by_id('txnEdit-date-input').send_keys(1)
-    ####################################################################################
-
-    driver.find_element_by_id('txnEdit-merchant_input').click()
-    driver.find_element_by_id('txnEdit-merchant_input').clear()
-    driver.find_element_by_id('txnEdit-merchant_input').send_keys(i['merchant'])
-    driver.find_element_by_id('txnEdit-category_input').clear()
-    driver.find_element_by_id('txnEdit-category_input').send_keys(i['category'])
-
-    #Before we set the amount, we need to set the type of expense
-    if not i['mtIsExpense']:
-        #this is a credit, click the credit button
-        driver.find_element_by_id('txnEdit-mt-income').send_keys(Keys.SPACE)
-
-    driver.find_element_by_id('txnEdit-amount_input').clear()
-    driver.find_element_by_id('txnEdit-amount_input').send_keys(str(i['amount']))
-    driver.find_element_by_id('txnEdit-note').click()
-    driver.find_element_by_id('txnEdit-note').send_keys('Mint Importer:\n\n%s' % (str(i['note'])))
-    driver.find_element_by_id('txnEdit-submit').click()
-    print 'Transaction %s of %s successfully added\n' % (str(c+1), str(len(import_list)))
-    print '----------------------\n\n'
-    sleep(3)
-
-
-
-
-
-def build_post_dict(description, default_category, default_merchant, txndate, txnamount, mtIsExpense, token):
-    post_dict={
-        'cashTxnType':'on',
-        'mtCheckNo':'',
-        'tag461974':'0',
-        'tag461975':'0',
-        'tag461976':'0',
-        'task':'txnadd',
-        'txnId':':0',
-        'mtType':'cash',
-        'mtAccount':'4928795',
-        'note':description,
-        'isInvestment':'false',
-        'catId':'20',
-        'category':default_category,
-        'merchant':default_merchant,
-        'date':txndate, #06/16/2014
-        'amount': txnamount, #0.99
-        'mtIsExpense':mtIsExpense,
-        'mtCashSplitPref':'2',
-        'token':token
-        }
-    return post_dict
 
 
 if __name__ == '__main__':
@@ -258,6 +198,7 @@ if __name__ == '__main__':
     
     
     args = parser.parse_args()
-    main(args.file, args.default_worksheet, args.default_category, args.date_col, args.description_col, args.debit_col, args.credit_col, args.header_row, args.token, args.default_merchant)
+    ma=MintAdder(args.file, args.default_worksheet, args.default_category, args.date_col, args.description_col, args.debit_col, args.credit_col, args.header_row, args.token, args.default_merchant)
+    main(mintadder=ma)
 
 
