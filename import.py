@@ -144,7 +144,7 @@ class MintAdder(object):
         self.driver.find_element_by_id("form-login-password").send_keys(MINT_PASSWORD)
         self.driver.find_element_by_id('submit').click()
         sleep(5)
-        self.driver.find_element_by_link_text('Transactions').click()
+        self.driver.find_element_by_link_text('TRANSACTIONS').click()
         sleep(10)
 
     def iterate_all_transactions(self):
